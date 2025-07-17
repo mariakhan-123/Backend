@@ -12,6 +12,12 @@ const userSchema = new mongoose.Schema({
   coverImg: String,
   otp: String,
   otpExpiry: Date,
+  role: {
+  type: String,
+  enum: ["user", "superadmin"],
+  default: "user",
+},
+ isActive: { type: Boolean, default: true }
 });
 
 userSchema.pre("save", async function (next) {

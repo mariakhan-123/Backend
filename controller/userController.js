@@ -4,6 +4,8 @@ const crypto = require("crypto");
 const bcrypt = require('bcrypt');
 const nodemailer = require("nodemailer");
 require("dotenv").config();
+const path = require('path');
+const fs = require('fs');
 
 async function signup(req, res) {
   try {
@@ -20,21 +22,24 @@ async function signup(req, res) {
       $or: [{ email }, { phoneNumber }],
     });
     if (existingUser) {
-      return res.status(400).send('User already exists!');
+      return res.status(400).send("User already exists!");
     }
-
-
+    console.log("Signup API called");
+    console.log("Files received:", req.files);
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
-    // Read images from memory and convert to base64
-    const profileImgBase64 = req.files['profileImg']
-      ? req.files['profileImg'][0].buffer.toString('base64')
-      : null;
+    const DEFAULT_PROFILE_IMG = "/defaults/default-profile.png";
+const DEFAULT_COVER_IMG = "/defaults/default-cover.png";
 
-    const coverImgBase64 = req.files['coverImg']
-      ? req.files['coverImg'][0].buffer.toString('base64')
-      : null;
+// Use uploaded file paths or defaults
+const profileImgPath = req.files["profileImg"]
+  ? `/uploads/${req.files["profileImg"][0].filename}`
+  : DEFAULT_PROFILE_IMG;
+
+const coverImgPath = req.files["coverImg"]
+  ? `/uploads/${req.files["coverImg"][0].filename}`
+  : DEFAULT_COVER_IMG;
 
     const newUser = new User({
       fullName,
@@ -43,17 +48,18 @@ async function signup(req, res) {
       DOB,
       gender,
       phoneNumber,
-      profileImg: profileImgBase64,
-      coverImg: coverImgBase64,
+      profileImg: profileImgPath,
+      coverImg: coverImgPath,
     });
 
     await newUser.save();
-    res.status(201).send('User registered successfully');
+    res.status(201).send("User registered successfully");
   } catch (err) {
-    console.error('Signup error:', err);
-    res.status(500).send('Internal server error');
+    console.error("Signup error:", err);
+    res.status(500).send("Internal server error");
   }
 }
+
 async function login(req, res) {
   try {
     const { email, password } = req.body;
@@ -67,8 +73,11 @@ async function login(req, res) {
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid password" });
     }
+      if (!user.isActive) {
+    return res.status(403).json({ message: 'User is not allowed to login' }); // 👈 BLOCK INACTIVE USER
+  }
     const token = jwt.sign(
-      { id: user._id, email: user.email },
+      { id: user._id, email: user.email, role: user.role, },
       process.env.JWT_SECRET || "mykey",
       { expiresIn: "1h" }
     );
@@ -192,55 +201,62 @@ const getUser = async (req, res) => {
 };
 const updateProfileImage = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!req.file) {
-      return res.status(400).json({ message: 'No image uploaded' });
+    // Delete old profile image if exists
+    if (user.profileImg) {
+      const oldPath = path.join(__dirname, '..', 'uploads', user.profileImg);
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { profileImg: req.file.buffer },
-      { new: true, select: '-password -otp -otpExpiry' }
-    );
+    user.profileImg = `/uploads/${req.file.filename}`;
+    await user.save();
 
-    const userObj = updatedUser.toObject();
-    userObj.profileImg = userObj.profileImg.toString('base64');
-    if (userObj.coverImg && Buffer.isBuffer(userObj.coverImg)) {
-      userObj.coverImg = userObj.coverImg.toString('base64');
-    }
-
-    res.status(200).json(userObj);
-  } catch (err) {
-    console.error('Profile image update failed:', err);
-    res.status(500).json({ message: 'Profile image update failed', error: err.message });
+    res.json(user);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error' });
   }
 };
 const updateCoverImage = async (req, res) => {
   try {
-    const userId = req.user._id || req.user.id;
+    const user = await User.findById(req.user.id);
+    if (!user) return res.status(404).json({ message: 'User not found' });
 
-    if (!req.file) {
-      return res.status(400).json({ message: 'No image uploaded' });
+    // Delete old cover image if exists
+    if (user.coverImg) {
+      const oldPath = path.join(__dirname, '..', user.coverImg); // already starts with /uploads/...
+      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
     }
 
-    const updatedUser = await User.findByIdAndUpdate(
-      userId,
-      { coverImg: req.file.buffer },
-      { new: true, select: '-password -otp -otpExpiry' }
-    );
+    // Save new cover image
+    user.coverImg = `/uploads/${req.file.filename}`;
+    await user.save();
 
-    const userObj = updatedUser.toObject();
-    userObj.coverImg = userObj.coverImg.toString('base64');
-    if (userObj.profileImg && Buffer.isBuffer(userObj.profileImg)) {
-      userObj.profileImg = userObj.profileImg.toString('base64');
-    }
-
-    res.status(200).json(userObj);
-  } catch (err) {
-    console.error('Cover image update failed:', err);
-    res.status(500).json({ message: 'Cover image update failed', error: err.message });
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating cover image:', error);
+    res.status(500).json({ message: 'Server error' });
   }
+};
+async function getAllUsers(req, res) {
+  try {
+    const users = await User.find({ role: "user" }).select("fullName email isActive");
+    res.json(users);
+  } catch (err) {
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+// PUT /users/toggle-user/:id
+async function toggleUser (req, res) {
+  const user = await User.findById(req.params.id);
+  if (!user) return res.status(404).json({ message: 'User not found' });
+
+  user.isActive = !user.isActive;
+  await user.save();
+
+  res.status(200).json({ message: 'User status updated', isActive: user.isActive });
 };
 
 module.exports = {
@@ -251,5 +267,7 @@ module.exports = {
   resetPassword,
   getUser,
   updateProfileImage,
-  updateCoverImage
+  updateCoverImage,
+  getAllUsers,
+  toggleUser
 };
