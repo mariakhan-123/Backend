@@ -8,8 +8,9 @@ function LoginValidation(req, res, next) {
   // Email Validation
   if (!email || typeof email !== 'string' || !emailRegex.test(email)) {
     return res.status(400).json({ error: 'Enter a valid email address.' });
+   
   }
-
+   
   // Password Validation
   if (!password || typeof password !== 'string' || !passwordRegex.test(password)) {
     return res.status(400).json({
@@ -66,7 +67,7 @@ function SignUpValidation(req, res, next) {
   if (!DOB) {
     return res.status(400).json({ error: 'Date of birth is required.' });
   }
-  const birthYear = new Date(DOB).getFullYear();
+  const birthYear = new Date(DOB).getFullYear(); //.getFullYear(2002) extract year from date
   const currentYear = new Date().getFullYear();
   const age = currentYear - birthYear;
   if (age < 16) {
@@ -112,6 +113,7 @@ function Auth(req, res, next) {
     next();
   });
 }
+
 function isSuperAdmin(req, res, next) {
   if (req.user.role !== "superadmin") {
     return res.status(403).json({ message: "Access denied" });

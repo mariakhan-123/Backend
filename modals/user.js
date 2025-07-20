@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const userSchema = new mongoose.Schema({
-  fullName: {type:String, required:true},
+  fullName: { type: String, required: true },
   username: { type: String, unique: true },
   email: { type: String, unique: true, required: true },
   password: { type: String, required: true },
@@ -13,11 +13,12 @@ const userSchema = new mongoose.Schema({
   otp: String,
   otpExpiry: Date,
   role: {
-  type: String,
-  enum: ["user", "superadmin"],
-  default: "user",
-},
- isActive: { type: Boolean, default: true }
+    type: String,
+    enum: ["user", "superadmin"],
+    default: "user",
+  },
+  isActive: { type: Boolean, default: true },
+ isDeleted: { type: Boolean, default: false }
 });
 
 userSchema.pre("save", async function (next) {

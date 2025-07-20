@@ -59,11 +59,92 @@ const coverImgPath = req.files["coverImg"]
     res.status(500).send("Internal server error");
   }
 }
+// let signupCache = {};
+// async function sendSignupOtp(req, res) {
+//   try {
+//     const {
+//       fullName, email, password, DOB, gender, phoneNumber,
+//     } = req.body;
+
+//     const existingUser = await User.findOne({ $or: [{ email }, { phoneNumber }] });
+//     if (existingUser) return res.status(400).send("User already exists!");
+
+//     // Generate OTP
+//     const otp = Math.floor(1000 + Math.random() * 9000).toString();
+
+//     // Hash password
+//     const salt = await bcrypt.genSalt(10);
+//     const hashedPassword = await bcrypt.hash(password, salt);
+
+//     // Save user data temporarily in memory
+//     signupCache[email] = {
+//       fullName,
+//       email,
+//       password: hashedPassword,
+//       DOB,
+//       gender,
+//       phoneNumber,
+//       otp,
+//       otpExpiry: Date.now() + 5 * 60 * 1000 // 5 minutes
+//     };
+
+//     // Send OTP to email
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: process.env.EMAIL,
+//         pass: process.env.EMAIL_PASS,
+//       },
+//     });
+
+//     await transporter.sendMail({
+//       to: email,
+//       subject: "Signup OTP Verification",
+//       html: `<p>Your OTP is <b>${otp}</b>. It expires in 5 minutes.</p>`,
+//     });
+
+//     res.status(200).send("OTP sent to your email.");
+//   } catch (error) {
+//     console.error("Send OTP error:", error);
+//     res.status(500).send("Internal server error");
+//   }
+// }
+// async function verifySignupOtp(req, res) {
+//   const { email, otp } = req.body;
+//   const data = signupCache[email];
+
+//   if (!data) return res.status(400).send("OTP not requested.");
+//   if (data.otp !== otp || Date.now() > data.otpExpiry) {
+//     return res.status(400).send("Invalid or expired OTP.");
+//   }
+
+//   const DEFAULT_PROFILE_IMG = "/defaults/default-profile.png";
+//   const DEFAULT_COVER_IMG = "/defaults/default-cover.png";
+
+//   const newUser = new User({
+//     fullName: data.fullName,
+//     email: data.email,
+//     password: data.password,
+//     DOB: data.DOB,
+//     gender: data.gender,
+//     phoneNumber: data.phoneNumber,
+//     profileImg: DEFAULT_PROFILE_IMG,
+//     coverImg: DEFAULT_COVER_IMG,
+//     isActive: true
+//   });
+
+//   await newUser.save();
+//   delete signupCache[email]; // Clean up temporary cache
+
+//   res.status(201).send("User registered successfully.");
+// }
+
 
 async function login(req, res) {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
+    console.log("This return full object", user)
 
     if (!user) {
       return res.status(401).json({ message: "Invalid email" });
@@ -183,20 +264,15 @@ const getUser = async (req, res) => {
  const userId = req.user._id || req.user.id; // depending on your middleware
 
     const user = await User.findById(userId).select('-password -otp -otpExpiry');
+    console.log(user)
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    // Convert Buffer images to base64 if present
     const userObj = user.toObject();
-    if (userObj.profileImg && Buffer.isBuffer(userObj.profileImg)) {
-      userObj.profileImg = userObj.profileImg.toString('base64');
-    }
-    if (userObj.coverImg && Buffer.isBuffer(userObj.coverImg)) {
-      userObj.coverImg = userObj.coverImg.toString('base64');
-    }
-
+    console.log(userObj)
+  
     res.status(200).json(userObj);
 };
 const updateProfileImage = async (req, res) => {
@@ -239,27 +315,10 @@ const updateCoverImage = async (req, res) => {
     res.status(500).json({ message: 'Server error' });
   }
 };
-async function getAllUsers(req, res) {
-  try {
-    const users = await User.find({ role: "user" }).select("fullName email isActive");
-    res.json(users);
-  } catch (err) {
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// PUT /users/toggle-user/:id
-async function toggleUser (req, res) {
-  const user = await User.findById(req.params.id);
-  if (!user) return res.status(404).json({ message: 'User not found' });
-
-  user.isActive = !user.isActive;
-  await user.save();
-
-  res.status(200).json({ message: 'User status updated', isActive: user.isActive });
-};
 
 module.exports = {
+  // sendSignupOtp,
+  // verifySignupOtp,
   signup,
   login,
   forgotPassword,
@@ -267,7 +326,5 @@ module.exports = {
   resetPassword,
   getUser,
   updateProfileImage,
-  updateCoverImage,
-  getAllUsers,
-  toggleUser
+  updateCoverImage
 };

@@ -10,7 +10,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors({
   origin: 'http://localhost:3000',
-  credentials: true
+  // credentials: true
 }));
 
 app.use(express.json());
@@ -19,7 +19,7 @@ app.use('/users', userRoutes);
 
 // Static file serving
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
-app.use('/defaults', express.static(path.join(__dirname, 'public/defaults')));
+app.use('/defaults', express.static(path.join(__dirname, 'defaults')));
 
 mongoose.connect('mongodb://localhost:27017/Database')
   .then(() => {
